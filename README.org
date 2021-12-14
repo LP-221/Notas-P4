@@ -1,0 +1,224 @@
+* Lenguajes de Programación Grupo 7084
+Correos:
++ Profesor: L. en C.C. Fernando Abigail Galicia Mendoza | fernandogamen@ciencias.unam.mx
++ Ayudante: Alexis Rivas León | alex-rivasl@ciencias.unam.mx
++ Laboratorio: Emiliano Galeana Araujo | galeanaara@ciencias.unam.mx
+
+Curso:
++ Classroom
++ [[https://t.me/joinchat/L0xngv-r02EwYzFh][telegram]]
++ [[https://drive.google.com/drive/u/0/folders/136bZP00WtqWWFJAkZDo7mS-OsAx_B_7zWCc1iZVEvYp3vDKIpuMTPoECgpc_w9RvkkSYJrc8][drive]]
++ [[https://meet.google.com/vhh-hvip-aci?authuser=0&hs=179][Clases]]
++ LP20221-ASUNTO
+
+
+* Proyecto 4 MiniC
+
+  run with =-fmax-pmcheck-iterations=5000000= for avoid Warinings
+
+** MiniC
+
+Lo de siempre...
+
+#+BEGIN_SRC haskell
+module MiniCLP where
+
+import Data.List
+import Data.Char
+#+END_SRC
+
+*** data
+
+#+BEGIN_SRC haskell
+-- | A 'MiniC' is a implementation of the abstract syntax of typed Mini C programs.
+data MiniC = V Name                -- ^ Constructor for the typed variables.
+           | N Int                 -- ^ Constructor for the typed numbers.
+           | B Bool                -- ^ Constructor for the typed booleans.
+           | Suc MiniC             -- ^ Constructor for the typed successor operator.
+           | Pred MiniC            -- ^ Constructor for the typed predecessor operator.
+           | Plus MiniC MiniC      -- ^ Constructor for the typed plus operator.
+           | Prod MiniC MiniC      -- ^ Constructor for the typed product operator.
+           | Neg MiniC             -- ^ Constructor for the typed negation operator.
+           | Conj MiniC MiniC      -- ^ Constructor for the typed conjunction operator.
+           | Disy MiniC MiniC      -- ^ Constructor for the typed disjunction operator.
+           | Gt MiniC MiniC        -- ^ Constructor for the typed greater than operator.
+           | Lt MiniC MiniC        -- ^ Constructor for the typed lower than operator.
+           | Equi MiniC MiniC      -- ^ Constructor for the typed equality operator.
+           | Ift MiniC MiniC MiniC -- ^ Constructor for the typed if-else conditional.
+           | Let Name MiniC MiniC  -- ^ Constructor for the typed let expretion. -- new
+           | L Name MiniC          -- ^ Constructor for the typed abstraction.
+           | App MiniC MiniC       -- ^ Constructor for the typed application.
+           | Fix Name MiniC        -- ^ Constructor for fix operator.
+           -- Imperative operators for memory
+           | Li Label              -- ^ Constructor for the memory labels
+           | Assign MiniC MiniC    -- ^ Constructor for the assignments
+           | Ref MiniC             -- ^ Constructor for the references
+           | DeRef MiniC           -- ^ Constructor for the dereferences
+           | Void                  -- ^ Constructor for the empty expression
+           -- | Seq MiniC MiniC       -- ^ Constructor for the sequence of programs
+           | Seq [MiniC]           -- ^ Constructor for the sequence of programs
+           | While MiniC MiniC     -- ^ Constructor for the while cycle
+           deriving (Eq)
+#+END_SRC
+
+*** types
+
+#+BEGIN_SRC haskell
+-- | A 'Exec' is a representation of a state of the execution of the program.
+type Exec = (Memory, MiniC)
+
+-- | Type that represents the memory address.
+type Label = Int
+
+-- | A 'Memory' is the implementation of a abstract memory. Consists
+-- in a pair (l,v) that represents the expression (l |-> v).
+type Memory = [(Label, MiniC)]
+
+-- | Type that represents the set of possible variable names.
+type Name = String
+
+-- | A 'Subst' represents a substitution.
+type Subst = (Name, MiniC)
+#+END_SRC
+
+*** instance show
+
+#+BEGIN_SRC haskell
+instance Show MiniC where
+  show l = case l of
+    V x          -> x
+    N n          -> "num["++show n++"]"
+    B b          -> "bool["++show b++"]"
+    Suc e        -> "suc("++show e++")"
+    Pred e       -> "pred("++show e++")"
+    Plus e1 e2   -> "("++show e1++"+"++show e2++")"
+    Prod e1 e2   -> "("++show e1++"*"++show e2++")"
+    Neg e        -> "not("++show e++")"
+    Conj e1 e2   -> "("++show e1++"&&"++show e2++")"
+    Disy e1 e2   -> "("++show e1++"||"++show e2++")"
+    Gt e1 e2     -> "("++show e1++">"++show e2++")"
+    Lt e1 e2     -> "("++show e1++"<"++show e2++")"
+    Equi e1 e2   -> "("++show e1++"=="++show e2++")"
+    Ift e1 e2 e3 -> "if "++show e1++" then "++show e2++" else "++show e3
+    Let x a b    -> "Let(" ++ (show x) ++ "," ++ (show a) ++ "." ++ (show b)
+    L x t        -> "(lam ("++x++")"++" => "++show t++")"
+    App t s      -> "("++show t++" <+> "++show s++")"
+    Fix f t      -> "(fix "++f++" : "++" => "++show t++")"
+    --
+    Seq e1       -> "(" ++ (concat $ intersperse ";" $ map show e1) ++")"
+    Li x         -> "(l_"++show x++")"
+    Assign e1 e2 -> "("++show e1++" := "++show e2++")"
+    Ref e        -> "(ref ("++show e++"))"
+    DeRef e      -> "(!("++show e++"))"
+    Void         -> "()"
+    While e1 e2  -> "(while ("++show e1++","++show e2++"))"
+#+END_SRC
+
+*** funciones "conocidas"
+
+**** fv
+
+#+BEGIN_SRC haskell
+-- | The 'fv' function takes a typed Mini Haskell program and returns their free variables.
+fv :: MiniC -> [Name]
+#+END_SRC
+
+**** newId
+
+#+BEGIN_SRC haskell
+{-|
+The 'newId' function creates a new variable with the following conditions:
+1. If at the end of the variable is not a number then the function 
+add the number 0 at the end of the variable.
+2. If at the end of the variable is a number then the function
+replace the original number with its sucessor.
+-} 
+newId :: Name -> Name
+#+END_SRC
+
+**** splitName
+
+#+BEGIN_SRC haskell
+{-|
+The 'splitName' function tries to split strings of the form "vn" returning
+the pair (v,n) where "v" could be any string but "n" is a string with only numbers.
+If the string doesn't end with a number then "n" will be equal to the empty string.
+-}
+splitName :: Name -> (Name,Name) -> (Name,Name)
+#+END_SRC
+
+**** alpha
+
+#+BEGIN_SRC haskell
+-- | The 'alpha' function generates the alpha-equivalence of a typed Mini Haskell program.
+alpha :: MiniC -> MiniC
+#+END_SRC
+
+**** substitution
+
+#+BEGIN_SRC haskell
+-- | The 'substitution' function applies the substitution given as 
+-- a parameter to a typed Mini Haskell program.
+substitution :: MiniC -> Subst -> MiniC
+#+END_SRC
+
+**** eval1
+
+#+BEGIN_SRC haskell
+-- | The 'eval' function is an implementation of the evaluation for typed Mini Haskell
+-- programs.
+eval1 :: Exec -> Exec
+#+END_SRC
+
+*** Funciones "nuevas"
+
+**** newL
+
+#+BEGIN_SRC haskell
+-- | The 'newL' function returns a new location memory.
+newL :: Memory -> Int
+#+END_SRC
+
+**** getVal
+
+#+BEGIN_SRC haskell
+-- | The 'getVal' function returns the value stored in a memory and location given
+-- as parameters.
+getVal :: Label -> Memory -> MiniC
+#+END_SRC
+
+**** changeMem
+
+#+BEGIN_SRC haskell
+-- | The 'changeMem' function returns the updated memory.
+changeMem :: Memory -> Label -> MiniC -> Memory
+#+END_SRC
+
+**** isVal
+
+#+BEGIN_SRC haskell
+-- | The 'isValue' is the predicate that determines if a typed Mini Haskell
+-- program is a value.
+isVal :: MiniC -> Bool
+#+END_SRC
+
+*** Ejecución
+
+**** evals'
+
+#+BEGIN_SRC haskell
+{-| 
+The 'evals' function is the implementation of the relexive-transitive closure
+of the evaluation relation.
+-}
+evals' :: Exec -> Exec
+#+END_SRC
+
+**** exec
+
+#+BEGIN_SRC haskell
+-- | The 'exec' function evaluates a program in a empty memory.
+exec :: MiniC -> Exec
+#+END_SRC
+
+** MiniC con errores
